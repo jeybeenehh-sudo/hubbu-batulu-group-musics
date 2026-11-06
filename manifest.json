@@ -1,0 +1,10 @@
+{
+  "name": "HUBBU BATULU GROUP MUSICS",
+  "short_name": "Hubbu Batulu",
+  "description": "Mawakan Annabi da iyalansa",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101b16",
+  "theme_color": "#075c3b"
+}
