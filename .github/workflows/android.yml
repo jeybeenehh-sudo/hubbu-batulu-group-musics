@@ -6,42 +6,188 @@ on:
   push:
     paths:
       - '.github/workflows/android.yml'
-      - 'index.html'
-      - 'songs.json'
       - '*.mp3'
       - '*.png'
+      - 'songs.json'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Get website files
+      - name: Download repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '11'
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '7.6.4'
 
+      - name: Prepare offline music files
+        run: |
+          mkdir -p app/src/main/assets/www
+          mkdir -p app/src/main/java/com/hubbubatulu/music
+
+          python3 - <<'PY'
+          import os, json, glob, shutil
+          from urllib.parse import unquote
+
+          dest = "app/src/main/assets/www"
+          metadata = {}
+
+          if os.path.exists("songs.json"):
+              try:
+                  with open("songs.json", encoding="utf-8") as f:
+                      for song in json.load(f):
+                          audio = unquote(song.get("audio", ""))
+                          metadata[os.path.basename(audio)] = song
+              except Exception:
+                  pass
+
+          songs = []
+          for path in sorted(glob.glob("*.mp3")):
+              filename = os.path.basename(path)
+              shutil.copy2(path, os.path.join(dest, filename))
+              old = metadata.get(filename, {})
+              title = old.get("title") or os.path.splitext(filename)[0]
+              songs.append({
+                  "title": title,
+                  "artist": old.get("artist", "HUBBU BATULU GROUP"),
+                  "audio": filename
+              })
+
+          if not songs:
+              raise SystemExit("ERROR: No MP3 music files found!")
+
+          with open(os.path.join(dest, "songs-data.js"), "w", encoding="utf-8") as f:
+              f.write("window.HUBBU_SONGS = ")
+              json.dump(songs, f, ensure_ascii=False)
+              f.write(";")
+
+          logo = "file_000000000ff8820bb7b71d6099faa4a3.png"
+          if not os.path.exists(logo):
+              raise SystemExit("ERROR: Group logo not found!")
+          shutil.copy2(logo, os.path.join(dest, "logo.png"))
+
+          print("MP3 files included:", len(songs))
+          PY
+
+      - name: Create offline music player
+        run: |
+          cat > app/src/main/assets/www/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="ha">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>HUBBU BATULU GROUP MUSICS</title>
+          <style>
+          body {
+            margin: 0;
+            padding: 20px;
+            background: #101b16;
+            color: white;
+            font-family: Arial, sans-serif;
+          }
+          header { text-align: center; }
+          header img {
+            width: 125px;
+            height: 125px;
+            object-fit: contain;
+            border-radius: 15px;
+          }
+          h1 { color: #d9bd68; font-size: 23px; }
+          .motto { color: #ddd; }
+          h2 { color: #d9bd68; margin-top: 30px; }
+          .song {
+            background: #1d3026;
+            margin: 12px 0;
+            padding: 15px;
+            border-radius: 12px;
+          }
+          .song button {
+            background: #087849;
+            color: white;
+            border: 0;
+            padding: 10px 18px;
+            border-radius: 7px;
+            margin-top: 10px;
+          }
+          #player {
+            width: 100%;
+            margin-top: 20px;
+          }
+          footer {
+            text-align: center;
+            color: #aaa;
+            margin-top: 35px;
+          }
+          </style>
+          </head>
+          <body>
+          <header>
+            <img src="logo.png" alt="Hubbu Batulu Logo">
+            <h1>HUBBU BATULU GROUP MUSICS</h1>
+            <p class="motto">Mawakan Annabi da iyalansa</p>
+          </header>
+
+          <h2>Waƙoƙinmu</h2>
+          <div id="songs"></div>
+
+          <audio id="player" controls></audio>
+          <p id="nowPlaying">Zaɓi waƙa domin sauraro.</p>
+
+          <footer>
+            © HUBBU BATULU GROUP MUSICS
+          </footer>
+
+          <script src="songs-data.js"></script>
+          <script>
+          const songs = window.HUBBU_SONGS || [];
+          const list = document.getElementById("songs");
+          const player = document.getElementById("player");
+          const now = document.getElementById("nowPlaying");
+
+          songs.forEach((song) => {
+            const item = document.createElement("div");
+            item.className = "song";
+
+            const title = document.createElement("strong");
+            title.textContent = song.title;
+
+            const artist = document.createElement("p");
+            artist.textContent = "Mawaƙi: " + song.artist;
+
+            const button = document.createElement("button");
+            button.textContent = "▶ Saurara";
+
+            button.onclick = () => {
+              player.src = encodeURIComponent(song.audio);
+              player.play();
+              now.textContent = "Ana kunna: " + song.title;
+            };
+
+            item.appendChild(title);
+            item.appendChild(artist);
+            item.appendChild(button);
+            list.appendChild(item);
+          });
+          </script>
+          </body>
+          </html>
+          EOF
+
       - name: Create Android project
         run: |
-          mkdir -p app/src/main/java/com/hubbubatulu/music
-          mkdir -p app/src/main/assets/www
-
-          cp index.html app/src/main/assets/www/
-          cp songs.json app/src/main/assets/www/
-          cp service-worker.js app/src/main/assets/www/ || true
-          cp ./*.mp3 app/src/main/assets/www/ 2>/dev/null || true
-          cp ./*.png app/src/main/assets/www/ 2>/dev/null || true
-          cp manifest.json app/src/main/assets/www/ || true
-
           cat > settings.gradle <<'EOF'
           pluginManagement {
               repositories {
@@ -80,9 +226,9 @@ jobs:
                   applicationId 'com.hubbubatulu.music'
                   minSdk 24
                   targetSdk 28
-                  versionCode 2
-                  versionName '2.0'
-          }
+                  versionCode 3
+                  versionName '3.0'
+              }
           }
           EOF
 
@@ -90,7 +236,8 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:label="HUBBU BATULU GROUP MUSICS">
+                  android:label="HUBBU BATULU GROUP MUSICS"
+                  android:usesCleartextTraffic="false">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -119,13 +266,14 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
                   web = new WebView(this);
                   WebSettings settings = web.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
+
                   web.setWebViewClient(new WebViewClient());
                   setContentView(web);
                   web.loadUrl("file:///android_asset/www/index.html");
@@ -145,7 +293,7 @@ jobs:
       - name: Build APK
         run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Upload offline APK
         uses: actions/upload-artifact@v4
         with:
           name: Hubbu-Batulu-Offline-APK
