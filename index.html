@@ -1,10 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="ha">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#075c3b">
+<link rel="manifest" href="./manifest.json">
 <title>HUBBU BATULU GROUP MUSICS</title>
 
 <style>
@@ -20,28 +20,16 @@ header {
   padding: 25px 10px;
   border-bottom: 4px solid #d4aa35;
 }
-.logo {
-  width: 130px;
-  max-width: 50%;
-}
-h1, h2, .song h3 {
-  color: #ffd34e;
-}
-main {
-  max-width: 650px;
-  margin: auto;
-  padding: 20px;
-}
+.logo { width: 130px; max-width: 50%; }
+h1, h2, .song h3 { color: #ffd34e; }
+main { max-width: 650px; margin: auto; padding: 20px; }
 .song {
   background: #20372c;
   padding: 18px;
   margin: 15px 0;
   border-radius: 12px;
 }
-audio {
-  width: 100%;
-  margin-top: 12px;
-}
+audio { width: 100%; margin-top: 12px; }
 .download {
   display: inline-block;
   background: #d4aa35;
@@ -52,26 +40,22 @@ audio {
   text-decoration: none;
   font-weight: bold;
 }
-footer {
-  text-align: center;
-  padding: 20px;
-}
+footer { text-align: center; padding: 20px; }
 </style>
 </head>
 
 <body>
-
 <header>
 <img class="logo"
 src="file_000000000ff8820bb7b71d6099faa4a3.png"
 alt="Hubbu Batulu Logo">
-
 <h1>HUBBU BATULU GROUP MUSICS</h1>
 <p>Mawakan Annabi da iyalansa</p>
 </header>
 
 <main>
 <h2>Waƙoƙinmu</h2>
+<p id="status">Ana duba waƙoƙi...</p>
 <div id="songs">Ana loda waƙoƙi...</div>
 </main>
 
@@ -83,12 +67,12 @@ async function loadSongs() {
 
   try {
     const response = await fetch("./songs.json");
-    if (!response.ok) throw new Error("Songs not found");
+    if (!response.ok) throw new Error();
 
     const songs = await response.json();
     area.innerHTML = "";
 
-    songs.forEach(song => {
+    for (const song of songs) {
       const box = document.createElement("div");
       box.className = "song";
 
@@ -106,7 +90,7 @@ async function loadSongs() {
       if (song.audio) {
         const player = document.createElement("audio");
         player.controls = true;
-        player.preload = "none";
+        player.preload = "auto";
         player.src = song.audio;
 
         const link = document.createElement("a");
@@ -119,20 +103,36 @@ async function loadSongs() {
       }
 
       area.append(box);
-    });
-
-    if (songs.length === 0) {
-      area.textContent = "Babu waƙa a yanzu.";
     }
 
+    if (!songs.length) area.textContent = "Babu waƙa a yanzu.";
   } catch (error) {
-    area.textContent = "Ba a iya loda waƙoƙi ba. A sake gwadawa.";
+    area.textContent = "Ba a iya loda waƙoƙi ba.";
   }
 }
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./service-worker.js");
+    } catch (error) {
+      console.log("Ba a haɗa offline ba.");
+    }
+  });
+}
+
+document.getElementById("status").textContent =
+  navigator.onLine ? "An haɗa intanet." : "Kana offline.";
+
+window.addEventListener("online", () => {
+  document.getElementById("status").textContent = "An haɗa intanet.";
+});
+
+window.addEventListener("offline", () => {
+  document.getElementById("status").textContent = "Kana offline.";
+});
+
 loadSongs();
 </script>
-
 </body>
 </html>
-  
