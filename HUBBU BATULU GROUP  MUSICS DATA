@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ha">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HUBBU BATULU GROUP MUSICS</title>
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #101b16;
+  color: white;
+  text-align: center;
+}
+header {
+  background: #075c3b;
+  padding: 25px 10px;
+}
+h1 { font-size: 25px; }
+main { padding: 20px; }
+.song {
+  background: #20372c;
+  margin: 15px auto;
+  padding: 20px;
+  border-radius: 12px;
+  max-width: 400px;
+}
+button {
+  background: #d4aa35;
+  border: 0;
+  padding: 12px 20px;
+  border-radius: 7px;
+  font-weight: bold;
+}
+footer { padding: 20px; color: #ccc; }
+</style>
+</head>
+<body>
+<header>
+<h1>HUBBU BATULU GROUP MUSICS</h1>
+<p>Mawakan Annabi da iyalansa</p>
+</header>
+<main>
+<h2>Waƙoƙinmu</h2>
+<div class="song">
+<h3>Barka da zuwa</h3>
+<p>Za a saka waƙoƙin Hubbu Batulu Group a nan.</p>
+</div>
+</main>
+<footer>© HUBBU BATULU GROUP MUSICS</footer>
+</body>
+</html>
