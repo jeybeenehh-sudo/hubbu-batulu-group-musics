@@ -1,111 +1,138 @@
+
 <!DOCTYPE html>
 <html lang="ha">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HUBBU BATULU GROUP MUSICS</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#075c3b">
+<title>HUBBU BATULU GROUP MUSICS</title>
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #101b16;
-      color: white;
-      text-align: center;
-    }
-
-    header {
-      background: #075c3b;
-      padding: 25px 10px;
-      border-bottom: 4px solid #d4aa35;
-    }
-
-    .logo {
-      width: 180px;
-      max-width: 65%;
-      border-radius: 15px;
-    }
-
-    h1 {
-      color: #ffd34e;
-      font-size: 25px;
-    }
-
-    main {
-      padding: 20px;
-    }
-
-    .song {
-      background: #20372c;
-      margin: 20px auto;
-      padding: 18px;
-      border-radius: 12px;
-      max-width: 420px;
-    }
-
-    .cover {
-      width: 100%;
-      max-width: 300px;
-      border-radius: 10px;
-    }
-
-    .song h3 {
-      color: #ffd34e;
-    }
-
-    .song p {
-      line-height: 1.6;
-    }
-
-    footer {
-      padding: 20px;
-      color: #ccc;
-    }
-  </style>
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #101b16;
+  color: white;
+}
+header {
+  text-align: center;
+  background: #075c3b;
+  padding: 25px 10px;
+  border-bottom: 4px solid #d4aa35;
+}
+.logo {
+  width: 130px;
+  max-width: 50%;
+}
+h1, h2, .song h3 {
+  color: #ffd34e;
+}
+main {
+  max-width: 650px;
+  margin: auto;
+  padding: 20px;
+}
+.song {
+  background: #20372c;
+  padding: 18px;
+  margin: 15px 0;
+  border-radius: 12px;
+}
+audio {
+  width: 100%;
+  margin-top: 12px;
+}
+.download {
+  display: inline-block;
+  background: #d4aa35;
+  color: #101b16;
+  padding: 12px 18px;
+  margin-top: 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: bold;
+}
+footer {
+  text-align: center;
+  padding: 20px;
+}
+</style>
 </head>
 
 <body>
 
-  <header>
-    <img
-      class="logo"
-      src="file_000000000ff8820bb7b71d6099faa4a3.png"
-      alt="Hubbu Batulu Logo">
+<header>
+<img class="logo"
+src="file_000000000ff8820bb7b71d6099faa4a3.png"
+alt="Hubbu Batulu Logo">
 
-    <h1>HUBBU BATULU GROUP MUSICS</h1>
-    <p>Mawakan Annabi da iyalansa</p>
-  </header>
+<h1>HUBBU BATULU GROUP MUSICS</h1>
+<p>Mawakan Annabi da iyalansa</p>
+</header>
 
-  <main>
-    <h2>Waƙoƙinmu</h2>
+<main>
+<h2>Waƙoƙinmu</h2>
+<div id="songs">Ana loda waƙoƙi...</div>
+</main>
 
-    <div class="song">
+<footer>© HUBBU BATULU GROUP MUSICS</footer>
 
-      <img
-        class="cover"
-        src="file_00000000a66c81f4acb12576985dae80.png"
-        alt="Maraba Rasulullah Cover">
+<script>
+async function loadSongs() {
+  const area = document.getElementById("songs");
 
-      <h3>MARABA RASULULLAH</h3>
+  try {
+    const response = await fetch("./songs.json");
+    if (!response.ok) throw new Error("Songs not found");
 
-      <p>Mawaƙi: A A HAIDAR</p>
+    const songs = await response.json();
+    area.innerHTML = "";
 
-      <p>Ƙungiya: HUBBU BATULU GROUP</p>
+    songs.forEach(song => {
+      const box = document.createElement("div");
+      box.className = "song";
 
-      <p>
-        Za a kunna waƙar nan bayan haɗa tsarin adana MP3.
-      </p>
+      const title = document.createElement("h3");
+      title.textContent = song.title;
 
-    </div>
-  </main>
+      const artist = document.createElement("p");
+      artist.textContent = "Mawaƙi: " + song.artist;
 
-  <footer>
-    © HUBBU BATULU GROUP MUSICS
-  </footer>
+      const group = document.createElement("p");
+      group.textContent = "Ƙungiya: " + song.group;
+
+      box.append(title, artist, group);
+
+      if (song.audio) {
+        const player = document.createElement("audio");
+        player.controls = true;
+        player.preload = "none";
+        player.src = song.audio;
+
+        const link = document.createElement("a");
+        link.href = song.audio;
+        link.download = "";
+        link.className = "download";
+        link.textContent = "Sauke waƙa";
+
+        box.append(player, link);
+      }
+
+      area.append(box);
+    });
+
+    if (songs.length === 0) {
+      area.textContent = "Babu waƙa a yanzu.";
+    }
+
+  } catch (error) {
+    area.textContent = "Ba a iya loda waƙoƙi ba. A sake gwadawa.";
+  }
+}
+
+loadSongs();
+</script>
 
 </body>
 </html>
+  
