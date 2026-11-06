@@ -16,135 +16,135 @@ permissions:
 
 jobs:
   build:
+    name: Build Offline Android APK
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '11'
 
-      - name: Setup Gradle
+      - name: Set up Gradle without cache
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '7.6.4'
+          gradle-version: 7.6.4
+          cache-disabled: true
 
-      - name: Prepare offline website
+      - name: Prepare offline music and website
+        shell: bash
         run: |
           mkdir -p app/src/main/assets/www
           mkdir -p app/src/main/java/com/hubbubatulu/music
 
-          cp index.html app/src/main/assets/www/index.html
-
           python3 - <<'PY'
-          import os, json, glob, shutil
+          import os, json, shutil, re
+          from pathlib import Path
           from urllib.parse import unquote
 
-          dest = "app/src/main/assets/www"
+          root = Path(".")
+          web = Path("app/src/main/assets/www")
+          web.mkdir(parents=True, exist_ok=True)
 
-          with open("songs.json", encoding="utf-8") as f:
-              original = json.load(f)
+          html_path = root / "index.html"
+          if not html_path.exists():
+              raise SystemExit("index.html bai samu ba")
 
-          songs = []
+          html = html_path.read_text(encoding="utf-8")
 
-          for song in original:
-              audio = unquote(song.get("audio", ""))
-              filename = os.path.basename(audio)
+          logo = root / "file_000000000ff8820bb7b71d6099faa4a3.png"
+          if not logo.exists():
+              raise SystemExit("Tsohon logo bai samu ba")
 
-              if not filename or not os.path.isfile(filename):
-                  raise SystemExit("MP3 not found: " + filename)
+          shutil.copy2(logo, web / "logo.png")
 
-              shutil.copy2(filename, os.path.join(dest, filename))
+          songs_file = root / "songs.json"
+          songs = json.loads(songs_file.read_text(encoding="utf-8")) if songs_file.exists() else []
 
-              songs.append({
-                  "title": song.get("title", filename),
-                  "artist": song.get("artist", "HUBBU BATULU GROUP"),
-                  "group": song.get("group", "HUBBU BATULU GROUP"),
-                  "audio": filename
-              })
+          mp3_files = sorted(root.glob("*.mp3"))
+          if not mp3_files:
+              raise SystemExit("Ba a samu MP3 ba")
 
-          if not songs:
-              raise SystemExit("No songs found in songs.json")
+          final_songs = []
+          used = set()
 
-          with open(os.path.join(dest, "songs-data.js"), "w", encoding="utf-8") as f:
-              f.write("window.HUBBU_SONGS = ")
-              json.dump(songs, f, ensure_ascii=False)
-              f.write(";")
+          for song in songs:
+              audio = unquote(str(song.get("audio", "")))
+              wanted = Path(audio).name
+              match = next((p for p in mp3_files if p.name.lower() == wanted.lower()), None)
 
-          logo = "file_000000000ff8820bb7b71d6099faa4a3.png"
+              if match:
+                  final_songs.append({
+                      "title": song.get("title") or match.stem,
+                      "artist": song.get("artist") or "HUBBU BATULU GROUP",
+                      "group": song.get("group") or "HUBBU BATULU GROUP",
+                      "audio": match.name
+                  })
+                  used.add(match.name)
 
-          if not os.path.isfile(logo):
-              raise SystemExit("Group logo not found!")
+          for mp3 in mp3_files:
+              if mp3.name not in used:
+                  final_songs.append({
+                      "title": mp3.stem,
+                      "artist": "HUBBU BATULU GROUP",
+                      "group": "HUBBU BATULU GROUP",
+                      "audio": mp3.name
+                  })
 
-          shutil.copy2(logo, os.path.join(dest, "logo.png"))
+          for mp3 in mp3_files:
+              shutil.copy2(mp3, web / mp3.name)
 
-          print("Songs included:", len(songs))
-          print("Logo included successfully")
-          PY
-
-          python3 - <<'PY'
-          path = "app/src/main/assets/www/index.html"
-          with open(path, encoding="utf-8") as f:
-              html = f.read()
+          data = json.dumps(final_songs, ensure_ascii=False)
+          js = """
+          window.HUBBU_SONGS = """ + data + """;
+          const area = document.getElementById("songs");
+          const status = document.getElementById("status");
+          status.textContent = "Waƙoƙi suna cikin wayarka — Offline.";
+          area.innerHTML = "";
+          for (const song of window.HUBBU_SONGS) {
+            const box = document.createElement("div");
+            box.className = "song";
+            const title = document.createElement("h3");
+            title.textContent = song.title;
+            const artist = document.createElement("p");
+            artist.textContent = "Mawaƙi: " + song.artist;
+            const group = document.createElement("p");
+            group.textContent = "Ƙungiya: " + song.group;
+            const player = document.createElement("audio");
+            player.controls = true;
+            player.preload = "metadata";
+            player.src = "./" + encodeURIComponent(song.audio).replace(/'/g, "%27");
+            box.append(title, artist, group, player);
+            area.append(box);
+          }
+          if (!window.HUBBU_SONGS.length) {
+            area.textContent = "Babu waƙa a yanzu.";
+          }
+          """
 
           html = html.replace(
               'src="file_000000000ff8820bb7b71d6099faa4a3.png"',
               'src="logo.png"'
           )
 
-          start = html.find("<script>")
-          end = html.find("</script>", start)
+          html = re.sub(
+              r'<script>.*?</script>',
+              '<script>' + js + '</script>',
+              html,
+              count=1,
+              flags=re.S
+          )
 
-          if start < 0 or end < 0:
-              raise SystemExit("Could not locate original page script")
-
-          replacement = """<script src="songs-data.js"></script>
-          <script>
-          const songs = window.HUBBU_SONGS || [];
-          const area = document.getElementById("songs");
-          const status = document.getElementById("status");
-
-          status.textContent = "Waƙoƙin da ke cikin app ɗin";
-          area.innerHTML = "";
-
-          if (!songs.length) {
-            area.textContent = "Babu waƙa a yanzu.";
-          }
-
-          songs.forEach(song => {
-            const box = document.createElement("div");
-            box.className = "song";
-
-            const title = document.createElement("h3");
-            title.textContent = song.title;
-
-            const artist = document.createElement("p");
-            artist.textContent = "Mawaƙi: " + song.artist;
-
-            const group = document.createElement("p");
-            group.textContent = "Ƙungiya: " + song.group;
-
-            const player = document.createElement("audio");
-            player.controls = true;
-            player.preload = "none";
-            player.src = encodeURIComponent(song.audio);
-
-            box.append(title, artist, group, player);
-            area.appendChild(box);
-          });
-          </script>"""
-
-          html = html[:start] + replacement + html[end + len("</script>"):]
-
-          with open(path, "w", encoding="utf-8") as f:
-              f.write(html)
+          (web / "index.html").write_text(html, encoding="utf-8")
+          print("An shirya waƙoƙi:", len(final_songs))
           PY
 
       - name: Create Android project
+        shell: bash
         run: |
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -161,7 +161,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "HubbuBatulu"
+          rootProject.name = "HubbuBatuluMusic"
           include ':app'
           EOF
 
@@ -169,6 +169,11 @@ jobs:
           plugins {
               id 'com.android.application' version '7.4.2' apply false
           }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
           EOF
 
           cat > app/build.gradle <<'EOF'
@@ -184,8 +189,8 @@ jobs:
                   applicationId 'com.hubbubatulu.music'
                   minSdk 24
                   targetSdk 28
-                  versionCode 4
-                  versionName '4.0'
+                  versionCode 5
+                  versionName '5.0'
               }
           }
           EOF
@@ -193,8 +198,9 @@ jobs:
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
+                  android:label="HUBBU BATULU GROUP MUSICS"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:label="HUBBU BATULU GROUP MUSICS">
+                  android:usesCleartextTraffic="false">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -212,52 +218,45 @@ jobs:
 
           import android.app.Activity;
           import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
           import android.webkit.WebSettings;
-          import android.view.KeyEvent;
+          import android.webkit.WebView;
 
           public class MainActivity extends Activity {
-              WebView web;
-
               @Override
-              public void onCreate(Bundle savedInstanceState) {
+              protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  web = new WebView(this);
+                  WebView web = new WebView(this);
                   WebSettings settings = web.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setAllowFileAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
 
-                  web.setWebViewClient(new WebViewClient());
                   setContentView(web);
                   web.loadUrl("file:///android_asset/www/index.html");
               }
 
               @Override
-              public boolean onKeyDown(int keyCode, KeyEvent event) {
-                  if (keyCode == KeyEvent.KEYCODE_BACK && web.canGoBack()) {
-                      web.goBack();
-                      return true;
-                  }
-                  return super.onKeyDown(keyCode, event);
+              public void onBackPressed() {
+                  super.onBackPressed();
               }
           }
           EOF
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle --no-daemon assembleDebug
 
-      - name: Verify APK
+      - name: Check APK
         run: |
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
           test -s app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Hubbu-Batulu-Offline-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
           
