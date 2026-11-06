@@ -6,9 +6,10 @@ on:
   push:
     paths:
       - '.github/workflows/android.yml'
+      - 'index.html'
+      - 'songs.json'
       - '*.mp3'
       - '*.png'
-      - 'songs.json'
 
 permissions:
   contents: read
@@ -18,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Download repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -32,41 +33,42 @@ jobs:
         with:
           gradle-version: '7.6.4'
 
-      - name: Prepare offline music files
+      - name: Prepare offline website
         run: |
           mkdir -p app/src/main/assets/www
           mkdir -p app/src/main/java/com/hubbubatulu/music
+
+          cp index.html app/src/main/assets/www/index.html
 
           python3 - <<'PY'
           import os, json, glob, shutil
           from urllib.parse import unquote
 
           dest = "app/src/main/assets/www"
-          metadata = {}
 
-          if os.path.exists("songs.json"):
-              try:
-                  with open("songs.json", encoding="utf-8") as f:
-                      for song in json.load(f):
-                          audio = unquote(song.get("audio", ""))
-                          metadata[os.path.basename(audio)] = song
-              except Exception:
-                  pass
+          with open("songs.json", encoding="utf-8") as f:
+              original = json.load(f)
 
           songs = []
-          for path in sorted(glob.glob("*.mp3")):
-              filename = os.path.basename(path)
-              shutil.copy2(path, os.path.join(dest, filename))
-              old = metadata.get(filename, {})
-              title = old.get("title") or os.path.splitext(filename)[0]
+
+          for song in original:
+              audio = unquote(song.get("audio", ""))
+              filename = os.path.basename(audio)
+
+              if not filename or not os.path.isfile(filename):
+                  raise SystemExit("MP3 not found: " + filename)
+
+              shutil.copy2(filename, os.path.join(dest, filename))
+
               songs.append({
-                  "title": title,
-                  "artist": old.get("artist", "HUBBU BATULU GROUP"),
+                  "title": song.get("title", filename),
+                  "artist": song.get("artist", "HUBBU BATULU GROUP"),
+                  "group": song.get("group", "HUBBU BATULU GROUP"),
                   "audio": filename
               })
 
           if not songs:
-              raise SystemExit("ERROR: No MP3 music files found!")
+              raise SystemExit("No songs found in songs.json")
 
           with open(os.path.join(dest, "songs-data.js"), "w", encoding="utf-8") as f:
               f.write("window.HUBBU_SONGS = ")
@@ -74,117 +76,73 @@ jobs:
               f.write(";")
 
           logo = "file_000000000ff8820bb7b71d6099faa4a3.png"
-          if not os.path.exists(logo):
-              raise SystemExit("ERROR: Group logo not found!")
+
+          if not os.path.isfile(logo):
+              raise SystemExit("Group logo not found!")
+
           shutil.copy2(logo, os.path.join(dest, "logo.png"))
 
-          print("MP3 files included:", len(songs))
+          print("Songs included:", len(songs))
+          print("Logo included successfully")
           PY
 
-      - name: Create offline music player
-        run: |
-          cat > app/src/main/assets/www/index.html <<'EOF'
-          <!DOCTYPE html>
-          <html lang="ha">
-          <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>HUBBU BATULU GROUP MUSICS</title>
-          <style>
-          body {
-            margin: 0;
-            padding: 20px;
-            background: #101b16;
-            color: white;
-            font-family: Arial, sans-serif;
-          }
-          header { text-align: center; }
-          header img {
-            width: 125px;
-            height: 125px;
-            object-fit: contain;
-            border-radius: 15px;
-          }
-          h1 { color: #d9bd68; font-size: 23px; }
-          .motto { color: #ddd; }
-          h2 { color: #d9bd68; margin-top: 30px; }
-          .song {
-            background: #1d3026;
-            margin: 12px 0;
-            padding: 15px;
-            border-radius: 12px;
-          }
-          .song button {
-            background: #087849;
-            color: white;
-            border: 0;
-            padding: 10px 18px;
-            border-radius: 7px;
-            margin-top: 10px;
-          }
-          #player {
-            width: 100%;
-            margin-top: 20px;
-          }
-          footer {
-            text-align: center;
-            color: #aaa;
-            margin-top: 35px;
-          }
-          </style>
-          </head>
-          <body>
-          <header>
-            <img src="logo.png" alt="Hubbu Batulu Logo">
-            <h1>HUBBU BATULU GROUP MUSICS</h1>
-            <p class="motto">Mawakan Annabi da iyalansa</p>
-          </header>
+          python3 - <<'PY'
+          path = "app/src/main/assets/www/index.html"
+          with open(path, encoding="utf-8") as f:
+              html = f.read()
 
-          <h2>Waƙoƙinmu</h2>
-          <div id="songs"></div>
+          html = html.replace(
+              'src="file_000000000ff8820bb7b71d6099faa4a3.png"',
+              'src="logo.png"'
+          )
 
-          <audio id="player" controls></audio>
-          <p id="nowPlaying">Zaɓi waƙa domin sauraro.</p>
+          start = html.find("<script>")
+          end = html.find("</script>", start)
 
-          <footer>
-            © HUBBU BATULU GROUP MUSICS
-          </footer>
+          if start < 0 or end < 0:
+              raise SystemExit("Could not locate original page script")
 
-          <script src="songs-data.js"></script>
+          replacement = """<script src="songs-data.js"></script>
           <script>
           const songs = window.HUBBU_SONGS || [];
-          const list = document.getElementById("songs");
-          const player = document.getElementById("player");
-          const now = document.getElementById("nowPlaying");
+          const area = document.getElementById("songs");
+          const status = document.getElementById("status");
 
-          songs.forEach((song) => {
-            const item = document.createElement("div");
-            item.className = "song";
+          status.textContent = "Waƙoƙin da ke cikin app ɗin";
+          area.innerHTML = "";
 
-            const title = document.createElement("strong");
+          if (!songs.length) {
+            area.textContent = "Babu waƙa a yanzu.";
+          }
+
+          songs.forEach(song => {
+            const box = document.createElement("div");
+            box.className = "song";
+
+            const title = document.createElement("h3");
             title.textContent = song.title;
 
             const artist = document.createElement("p");
             artist.textContent = "Mawaƙi: " + song.artist;
 
-            const button = document.createElement("button");
-            button.textContent = "▶ Saurara";
+            const group = document.createElement("p");
+            group.textContent = "Ƙungiya: " + song.group;
 
-            button.onclick = () => {
-              player.src = encodeURIComponent(song.audio);
-              player.play();
-              now.textContent = "Ana kunna: " + song.title;
-            };
+            const player = document.createElement("audio");
+            player.controls = true;
+            player.preload = "none";
+            player.src = encodeURIComponent(song.audio);
 
-            item.appendChild(title);
-            item.appendChild(artist);
-            item.appendChild(button);
-            list.appendChild(item);
+            box.append(title, artist, group, player);
+            area.appendChild(box);
           });
-          </script>
-          </body>
-          </html>
-          EOF
+          </script>"""
+
+          html = html[:start] + replacement + html[end + len("</script>"):]
+
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(html)
+          PY
 
       - name: Create Android project
         run: |
@@ -226,8 +184,8 @@ jobs:
                   applicationId 'com.hubbubatulu.music'
                   minSdk 24
                   targetSdk 28
-                  versionCode 3
-                  versionName '3.0'
+                  versionCode 4
+                  versionName '4.0'
               }
           }
           EOF
@@ -236,8 +194,7 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:label="HUBBU BATULU GROUP MUSICS"
-                  android:usesCleartextTraffic="false">
+                  android:label="HUBBU BATULU GROUP MUSICS">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -293,7 +250,12 @@ jobs:
       - name: Build APK
         run: gradle assembleDebug
 
-      - name: Upload offline APK
+      - name: Verify APK
+        run: |
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Hubbu-Batulu-Offline-APK
