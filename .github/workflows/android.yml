@@ -1,14 +1,19 @@
-name: Build Hubbu Batulu APK
+
+name: Build Hubbu Batulu Offline APK
 
 on:
   workflow_dispatch:
   push:
     paths:
       - '.github/workflows/android.yml'
+      - 'index.html'
+      - 'songs.json'
+      - '*.mp3'
+      - '*.png'
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Get website files
@@ -28,6 +33,15 @@ jobs:
       - name: Create Android project
         run: |
           mkdir -p app/src/main/java/com/hubbubatulu/music
+          mkdir -p app/src/main/assets/www
+
+          cp index.html app/src/main/assets/www/
+          cp songs.json app/src/main/assets/www/
+          cp service-worker.js app/src/main/assets/www/ || true
+          cp ./*.mp3 app/src/main/assets/www/ 2>/dev/null || true
+          cp ./*.png app/src/main/assets/www/ 2>/dev/null || true
+          cp manifest.json app/src/main/assets/www/ || true
+
           cat > settings.gradle <<'EOF'
           pluginManagement {
               repositories {
@@ -66,19 +80,17 @@ jobs:
                   applicationId 'com.hubbubatulu.music'
                   minSdk 24
                   targetSdk 28
-                  versionCode 1
-                  versionName '1.0'
-              }
+                  versionCode 2
+                  versionName '2.0'
+          }
           }
           EOF
 
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET"/>
               <application
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:label="HUBBU BATULU GROUP MUSICS"
-                  android:usesCleartextTraffic="false">
+                  android:label="HUBBU BATULU GROUP MUSICS">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -111,11 +123,12 @@ jobs:
                   WebSettings settings = web.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
-                  settings.setCacheMode(WebSettings.LOAD_DEFAULT);
                   web.setWebViewClient(new WebViewClient());
                   setContentView(web);
-                  web.loadUrl("https://jeybeenehh-sudo.github.io/hubbu-batulu-group-musics/");
+                  web.loadUrl("file:///android_asset/www/index.html");
               }
 
               @Override
@@ -132,8 +145,9 @@ jobs:
       - name: Build APK
         run: gradle assembleDebug
 
-      - name: Save APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Hubbu-Batulu-APK
+          name: Hubbu-Batulu-Offline-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          
